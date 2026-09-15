@@ -14,9 +14,6 @@ const update = (file, transform) => {
   fs.writeFileSync(full, after);
 };
 
-// The upstream source archive does not contain .git, so its Husky prepare hook
-// would fail during yarn install. It is a development-only hook and is not
-// needed for production builds.
 const packageJsonPath = path.join(root, "package.json");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 if (packageJson.scripts?.prepare) {
@@ -24,8 +21,8 @@ if (packageJson.scripts?.prepare) {
   fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 }
 
-update("excalidraw-app/index.html", (html) => {
-  return html
+update("excalidraw-app/index.html", (html) =>
+  html
     .replace('<html lang="en">', '<html lang="zh-CN">')
     .replace("<title>Excalidraw Whiteboard</title>", "<title>ITJK Draw · 在线画图、流程图与架构图 | itjk.com</title>")
     .replace(/content="Free, collaborative whiteboard[^\"]*\| Excalidraw"/, 'content="ITJK Draw · 在线画图、流程图、架构图与白板 | itjk.com"')
@@ -41,8 +38,8 @@ update("excalidraw-app/index.html", (html) => {
     .replace(/content="https:\/\/excalidraw\.com\/og-image-3\.png"/g, 'content="https://draw.itjk.com/apple-touch-icon.png"')
     .replace('<link rel="canonical" href="https://excalidraw.com" />', '<link rel="canonical" href="https://draw.itjk.com" />')
     .replace('document.cookie.includes("excplus-autoredirect=true")', 'false /* ITJK Draw: disable upstream auto redirect */')
-    .replace('window.name = "_excalidraw";', 'window.name = "_itjk_draw";');
-});
+    .replace('window.name = "_excalidraw";', 'window.name = "_itjk_draw";'),
+);
 
 update("excalidraw-app/app-language/language-detector.ts", () => `import type { Language } from "@excalidraw/excalidraw/i18n";
 import LanguageDetector from "i18next-browser-languagedetector";
@@ -56,7 +53,6 @@ languageDetector.init({
 export const getPreferredLanguage = (): Language["code"] => "zh-CN";
 `);
 
-// Keep the useful application menu, but remove upstream product/social links.
 update("excalidraw-app/components/AppMainMenu.tsx", () => `import { eyeIcon } from "@excalidraw/excalidraw/components/icons";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
@@ -120,20 +116,21 @@ export const AppMainMenu: React.FC<{
 });
 `);
 
-// Replace the upstream help links with a single ITJK.com entry.
 update("packages/excalidraw/components/HelpDialog.tsx", (source) => {
   source = source.replace(
     'import { ExternalLinkIcon, GithubIcon, youtubeIcon } from "./icons";',
     'import { ExternalLinkIcon } from "./icons";',
   );
 
-  return source.replace(
-    /const Header = \(\) => \([\s\S]*?\n\);\n\nconst Section/,
-    `const Header = () => (\n  <div className="HelpDialog__header">\n    <a\n      className="HelpDialog__btn"\n      href="https://itjk.com"\n      target="_blank"\n      rel="noopener noreferrer"\n    >\n      <div className="HelpDialog__link-icon">{ExternalLinkIcon}</div>\n      ITJK.com\n    </a>\n  </div>\n);\n\nconst Section`,
-  );
+  const start = source.indexOf("const Header = () => (");
+  const end = source.indexOf("const Section", start);
+  if (start === -1 || end === -1) return source;
+
+  const header = `const Header = () => (\n  <div className="HelpDialog__header">\n    <a\n      className="HelpDialog__btn"\n      href="https://itjk.com"\n      target="_blank"\n      rel="noopener noreferrer"\n    >\n      <div className="HelpDialog__link-icon">{ExternalLinkIcon}</div>\n      ITJK.com\n    </a>\n  </div>\n);\n\n`;
+
+  return source.slice(0, start) + header + source.slice(end);
 });
 
-// Remove the upstream promotional/encryption link from the footer.
 update("excalidraw-app/components/AppFooter.tsx", () => `import { Footer } from "@excalidraw/excalidraw/index";
 import React from "react";
 
@@ -152,79 +149,59 @@ export const AppFooter = React.memo(
 
 update("excalidraw-app/App.tsx", (source) => {
   source = source.replace(
-    `import {\n  GithubIcon,\n  XBrandIcon,\n  DiscordIcon,\n  ExcalLogo,\n  usersIcon,\n  exportToPlus,\n  share,\n  youtubeIcon,\n} from "@excalidraw/excalidraw/components/icons";`,
-    `import {\n  usersIcon,\n  share,\n} from "@excalidraw/excalidraw/components/icons";`,
-  );
-
-  source = source.replace("  isExcalidrawPlusSignedUser,\n", "");
-  source = source.replace(
-    `import {\n  ExportToExcalidrawPlus,\n  exportToExcalidrawPlus,\n} from "./components/ExportToExcalidrawPlus";\n`,
-    "",
-  );
-  source = source.replace(
-    `import { ExcalidrawPlusIframeExport } from "./ExcalidrawPlusIframeExport";\n`,
-    "",
-  );
-  source = source.replace(
-    `import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";\n`,
-    "",
-  );
-
-  source = source.replace(
     "const isCollabDisabled = isRunningInIframe();",
     "const isCollabDisabled = true; // ITJK Draw: collaboration server is intentionally disabled",
   );
 
-  source = source.replace(
-    /\n  const ExcalidrawPlusCommand = \{[\s\S]*?\n  \};\n  const ExcalidrawPlusAppCommand = \{[\s\S]*?\n  \};\n/,
-    "\n",
-  );
+  // Hide the upstream cloud export button from the export dialog.
+  const exportStart = source.indexOf("              renderCustomUI: excalidrawAPI");
+  if (exportStart !== -1) {
+    const exportEndMarker = "                : undefined,\n";
+    const exportEnd = source.indexOf(exportEndMarker, exportStart);
+    if (exportEnd !== -1) {
+      source =
+        source.slice(0, exportStart) +
+        "              renderCustomUI: undefined,\n" +
+        source.slice(exportEnd + exportEndMarker.length);
+    }
+  }
 
-  source = source.replace(
-    /              renderCustomUI: excalidrawAPI[\s\S]*?                : undefined,\n/,
-    "              renderCustomUI: undefined,\n",
-  );
+  // Remove the upstream cloud action from overwrite confirmation.
+  const overwriteStartMarker = `          {excalidrawAPI && (\n            <OverwriteConfirmDialog.Action\n              title={t("overwriteConfirm.action.excalidrawPlus.title")}`;
+  const overwriteStart = source.indexOf(overwriteStartMarker);
+  if (overwriteStart !== -1) {
+    const overwriteEndMarker = "          )}\n";
+    const overwriteEnd = source.indexOf(overwriteEndMarker, overwriteStart);
+    if (overwriteEnd !== -1) {
+      source = source.slice(0, overwriteStart) + source.slice(overwriteEnd + overwriteEndMarker.length);
+    }
+  }
 
-  source = source.replace(
-    /\n              \{excalidrawAPI\?\.getEditorInterface\(\)\.formFactor === "desktop" && \([\s\S]*?\n              \)\}\n/,
-    "\n",
-  );
-
-  source = source.replace(
-    /\n          \{excalidrawAPI && \(\n            <OverwriteConfirmDialog\.Action[\s\S]*?\n            <\/OverwriteConfirmDialog\.Action>\n          \)\}/,
-    "",
-  );
-
-  // Remove GitHub, X, Discord, YouTube, Excalidraw+ and upstream export commands
-  // from the command palette while keeping the PWA command and local features.
-  source = source.replace(
-    /            \{\n              label: "GitHub",[\s\S]*?            \{\n              label: t\("labels\.installPWA"\),/,
-    `            {\n              label: t("labels.installPWA"),`,
-  );
-
-  source = source.replace(
-    /  const isCloudExportWindow =[\s\S]*?  \}\n\n  return \(/,
-    "  return (",
-  );
+  // Remove upstream GitHub/X/Discord/YouTube/Excalidraw+ entries from the command palette.
+  const linksStart = source.indexOf(`            {\n              label: "GitHub",`);
+  const linksEnd = source.indexOf(`            {\n              label: t("labels.installPWA"),`, linksStart);
+  if (linksStart !== -1 && linksEnd !== -1) {
+    source = source.slice(0, linksStart) + source.slice(linksEnd);
+  }
 
   return source;
 });
 
-// Any remaining user-facing references to upstream project/social/help pages in
-// runtime UI components should point to ITJK instead. We intentionally do not
-// touch functional services such as the public shape library backend.
+// Redirect any remaining user-facing references to upstream project/social/help
+// pages. String replacement is deliberately used instead of broad URL regexes
+// so source code cannot be consumed across line boundaries.
 const runtimeRoots = [
   path.join(root, "excalidraw-app"),
   path.join(root, "packages", "excalidraw", "components"),
 ];
-const upstreamLinkPatterns = [
-  /https:\/\/github\.com\/excalidraw\/excalidraw[^\"'` )]*/g,
-  /https:\/\/docs\.excalidraw\.com[^\"'` )]*/g,
-  /https:\/\/plus\.excalidraw\.com[^\"'` )]*/g,
-  /https:\/\/app\.excalidraw\.com[^\"'` )]*/g,
-  /https:\/\/x\.com\/excalidraw[^\"'` )]*/g,
-  /https:\/\/youtube\.com\/@excalidraw[^\"'` )]*/g,
-  /https:\/\/discord\.gg\/UexuTaE[^\"'` )]*/g,
+const upstreamLinkReplacements = [
+  ["https://github.com/excalidraw/excalidraw/", "https://itjk.com/"],
+  ["https://docs.excalidraw.com", "https://itjk.com"],
+  ["https://plus.excalidraw.com", "https://itjk.com"],
+  ["https://app.excalidraw.com", "https://itjk.com"],
+  ["https://x.com/excalidraw", "https://itjk.com"],
+  ["https://youtube.com/@excalidraw", "https://itjk.com"],
+  ["https://discord.gg/UexuTaE", "https://itjk.com"],
 ];
 
 const rewriteRuntimeLinks = (dir) => {
@@ -238,8 +215,8 @@ const rewriteRuntimeLinks = (dir) => {
     if (!/\.(?:ts|tsx|js|jsx|html)$/.test(entry.name)) continue;
     let content = fs.readFileSync(full, "utf8");
     const before = content;
-    for (const pattern of upstreamLinkPatterns) {
-      content = content.replace(pattern, "https://itjk.com");
+    for (const [from, to] of upstreamLinkReplacements) {
+      content = content.replaceAll(from, to);
     }
     if (content !== before) fs.writeFileSync(full, content);
   }
