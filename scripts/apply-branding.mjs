@@ -45,7 +45,8 @@ update("excalidraw-app/index.html", (html) => {
     .replace('window.name = "_excalidraw";', 'window.name = "_itjk_draw";');
 });
 
-update("excalidraw-app/app-language/language-detector.ts", () => `import LanguageDetector from "i18next-browser-languagedetector";
+update("excalidraw-app/app-language/language-detector.ts", () => `import type { Language } from "@excalidraw/excalidraw/i18n";
+import LanguageDetector from "i18next-browser-languagedetector";
 
 export const languageDetector = new LanguageDetector();
 
@@ -53,7 +54,7 @@ languageDetector.init({
   languageUtils: {},
 });
 
-export const getPreferredLanguage = () => "zh-CN" as const;
+export const getPreferredLanguage = (): Language["code"] => "zh-CN";
 `);
 
 update("excalidraw-app/App.tsx", (source) =>
