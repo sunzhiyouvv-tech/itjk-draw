@@ -3,5 +3,6 @@
   "buildCommand": "sh scripts/build.sh",
   "outputDirectory": "dist",
   "framework": null,
-  "cleanUrls": true
+  "cleanUrls": true,
+  "alias": ["draw.itjk.com"]
 }
