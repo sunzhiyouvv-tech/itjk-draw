@@ -14,6 +14,16 @@ const update = (file, transform) => {
   fs.writeFileSync(full, after);
 };
 
+// The upstream source archive does not contain .git, so its Husky prepare hook
+// would fail during yarn install. It is a development-only hook and is not
+// needed for production builds.
+const packageJsonPath = path.join(root, "package.json");
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+if (packageJson.scripts?.prepare) {
+  delete packageJson.scripts.prepare;
+  fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+}
+
 update("excalidraw-app/index.html", (html) => {
   return html
     .replace('<html lang="en">', '<html lang="zh-CN">')
